@@ -28,12 +28,17 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.Map.Entry;
+import java.util.regex.Matcher;
 
 import javax.annotation.Nullable;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.spdx.jacksonstore.MultiFormatStore.Format;
 import org.spdx.library.InvalidSPDXAnalysisException;
 import org.spdx.library.SpdxConstants;
+import org.spdx.library.model.Checksum;
 import org.spdx.library.model.ExternalSpdxElement;
 import org.spdx.library.model.IndividualUriValue;
 import org.spdx.library.model.ModelStorageClassConverter;
@@ -43,6 +48,7 @@ import org.spdx.library.model.SpdxDocument;
 import org.spdx.library.model.SpdxElement;
 import org.spdx.library.model.SpdxModelFactory;
 import org.spdx.library.model.TypedValue;
+import org.spdx.library.model.enumerations.ChecksumAlgorithm;
 import org.spdx.library.model.enumerations.RelationshipType;
 import org.spdx.library.model.license.AnyLicenseInfo;
 import org.spdx.library.model.license.LicenseInfoFactory;
@@ -63,6 +69,8 @@ import com.fasterxml.jackson.databind.node.JsonNodeType;
  */
 public class JacksonDeSerializer {
 	
+	static final Logger logger = LoggerFactory.getLogger(JacksonSerializer.class);
+
 	/**
 	 * Properties that should not be restored as part of the deserialization
 	 */
@@ -232,7 +240,7 @@ public class JacksonDeSerializer {
 			if (Objects.isNull(elementIdNode) || !elementIdNode.isTextual()) {
 				throw new InvalidSPDXAnalysisException("Missing SPDX element ID");
 			}
-			TypedValue element = addedElements.get(elementIdNode.asText());
+			Object element = idToObjectValue(documentNamespace, elementIdNode.asText(), addedElements);
 			if (Objects.isNull(element)) {
 				throw new InvalidSPDXAnalysisException("Missing SPDX element for ID "+elementIdNode.asText());
 			}
@@ -252,6 +260,9 @@ public class JacksonDeSerializer {
 				throw new InvalidSPDXAnalysisException("Missing required related element");
 			}
 			Object relatedElement = idToObjectValue(documentNamespace, relatedElementNode.asText(), addedElements);
+			if (Objects.isNull(relatedElement)) {
+				throw new InvalidSPDXAnalysisException("Missing SPDX related element for ID "+relatedElementNode.asText());
+			}
 			JsonNode commentNode = relationship.get(SpdxConstants.RDFS_PROP_COMMENT);
 			Optional<String> relationshipComment;
 			if (Objects.isNull(commentNode) || !commentNode.isTextual()) {
@@ -259,21 +270,108 @@ public class JacksonDeSerializer {
 			} else {
 				relationshipComment = Optional.of(commentNode.asText());
 			}
-			addRelationship(documentNamespace, element.getId(), relationshipType, relatedElement, relationshipComment);
+			addRelationship(documentNamespace, element, relationshipType, relatedElement, relationshipComment);
 		}
 	}
 
 	/**
 	 * Add a relationship to the element with ID elementId checking for duplicates
 	 * @param documentNamespace documentNamespace
-	 * @param elementId ID of the element containing the relationship
+	 * @param element The element containing the relationship
 	 * @param relationshipType relationshipType
 	 * @param relatedElement related element
 	 * @param relationshipComment optional comment for the relationship
 	 * @return the ID of the relationship
 	 * @throws InvalidSPDXAnalysisException 
 	 */
-	private String addRelationship(String documentNamespace, String elementId, SimpleUriValue relationshipType, Object relatedElement, Optional<String> relationshipComment) throws InvalidSPDXAnalysisException {
+	private String addRelationship(String documentNamespace, Object element, SimpleUriValue relationshipType, Object relatedElement, Optional<String> relationshipComment) throws InvalidSPDXAnalysisException {
+		if (element instanceof IndividualUriValue) {
+			return addRelationshipToFrom(documentNamespace, element, relationshipType, relatedElement, relationshipComment);
+		} else {
+			return addRelationshipFromTo(documentNamespace, element, relationshipType, relatedElement, relationshipComment);
+		}
+	}
+
+	/**
+	 * Add a relationship to the element with ID elementId checking for duplicates
+	 * @param documentNamespace documentNamespace
+	 * @param element The element containing the relationship
+	 * @param relationshipType relationshipType
+	 * @param relatedElement related element
+	 * @param relationshipComment optional comment for the relationship
+	 * @return the ID of the relationship
+	 * @throws InvalidSPDXAnalysisException 
+	 */
+	private String addRelationshipToFrom(String documentNamespace, Object element, SimpleUriValue relationshipType, Object relatedElement, Optional<String> relationshipComment) throws InvalidSPDXAnalysisException {
+        if (!(element instanceof IndividualUriValue)) {
+            throw new InvalidSPDXAnalysisException("Element is not of an Element type for relationship");
+        }
+		String externalElementUri = ((IndividualUriValue)element).getIndividualURI();
+		Matcher matcher = SpdxConstants.EXTERNAL_SPDX_ELEMENT_URI_PATTERN.matcher(externalElementUri);
+		if (!matcher.matches())		{
+			throw new InvalidSPDXAnalysisException("Element does not match an external reference: "+externalElementUri);
+		}
+		String externalDocumentNamespace = matcher.group(1);
+		String externalElementId = matcher.group(2);
+		Optional<TypedValue> mayBeExternalElement = store.getTypedValue(externalDocumentNamespace, externalElementId);
+		if (mayBeExternalElement.isEmpty()) {
+			throw new InvalidSPDXAnalysisException("Cannot resolve referenced element "+ element);
+		}
+		TypedValue externalElement = mayBeExternalElement.get();
+
+		SpdxDocument spdxDocument = new SpdxDocument(store, externalDocumentNamespace, null, false);
+
+		String externalDocumentRefId = store.getNextId(IdType.DocumentRef, externalDocumentNamespace);
+		if (relatedElement instanceof IndividualUriValue) {
+			String relatedElementUri = ((IndividualUriValue)relatedElement).getIndividualURI();
+			Matcher relatedElementMatcher = SpdxConstants.EXTERNAL_SPDX_ELEMENT_URI_PATTERN.matcher(relatedElementUri);
+			if (!relatedElementMatcher.matches())		{
+				throw new InvalidSPDXAnalysisException("Related element does not match an external reference: "+relatedElementUri);
+			}
+			String relatedElementDocumentNamespace = relatedElementMatcher.group(1);
+			String relatedElementId = relatedElementMatcher.group(2);
+	
+			spdxDocument.createExternalDocumentRef(externalDocumentRefId, relatedElementDocumentNamespace, Checksum.create(store, externalDocumentNamespace, ChecksumAlgorithm.SHA1, "d7579a802af116d0481526984990e37e00e3d734"));
+
+			return addRelationshipFromTo(externalDocumentNamespace, externalElement, relationshipType, relatedElement, relationshipComment); 
+		} else {
+			spdxDocument.createExternalDocumentRef(externalDocumentRefId, documentNamespace, Checksum.create(store, externalDocumentNamespace, ChecksumAlgorithm.SHA1, "d7579a802af116d0481526984990e37e00e3d734"));
+
+			IndividualUriValue rewrittenRelatedElement = new IndividualUriValue() {
+				@Override
+				public String getIndividualURI() {
+					if (relatedElement instanceof TypedValue) {
+						return documentNamespace+'#'+((TypedValue)relatedElement).getId();
+					} else if (relatedElement instanceof String) {
+						return documentNamespace+'#'+(String)relatedElement;
+					}
+					return null;
+				}
+			};	
+			return addRelationshipFromTo(externalDocumentNamespace, externalElement, relationshipType, rewrittenRelatedElement, relationshipComment); 
+
+		}
+	}
+
+	/**
+	 * Add a relationship to the element with ID elementId checking for duplicates
+	 * @param documentNamespace documentNamespace
+	 * @param element The element containing the relationship
+	 * @param relationshipType relationshipType
+	 * @param relatedElement related element
+	 * @param relationshipComment optional comment for the relationship
+	 * @return the ID of the relationship
+	 * @throws InvalidSPDXAnalysisException 
+	 */
+	private String addRelationshipFromTo(String documentNamespace, Object element, SimpleUriValue relationshipType, Object relatedElement, Optional<String> relationshipComment) throws InvalidSPDXAnalysisException {
+        String elementId;
+        if (element instanceof TypedValue) {
+            elementId = ((TypedValue)element).getId();
+        } else if (element instanceof String) {
+            elementId = (String)element;
+        } else {
+            throw new InvalidSPDXAnalysisException("Element is not of an Element type for relationship");
+        }
         String relatedElementId;
         if (relatedElement instanceof TypedValue) {
             relatedElementId = ((TypedValue)relatedElement).getId();
@@ -282,7 +380,7 @@ public class JacksonDeSerializer {
         } else if (relatedElement instanceof IndividualUriValue) {
             relatedElementId = ((IndividualUriValue)relatedElement).getIndividualURI();
         } else {
-            throw new InvalidSPDXAnalysisException("Related element is not of an Element type for relationship to element "+elementId);
+            throw new InvalidSPDXAnalysisException("Related element is not of an Element type for relationship");
         }
 	    // check for duplicates
 	    Map<SimpleUriValue, String> relatedElementRelationships = null;

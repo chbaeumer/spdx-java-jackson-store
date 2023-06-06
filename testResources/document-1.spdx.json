@@ -1,0 +1,60 @@
+{
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "spdxVersion": "SPDX-2.2",
+  "creationInfo": {
+    "comment": "This package has been shipped in source and binary form.\nThe binaries were created with gcc 4.5.1 and expect to link to\ncompatible system run time libraries.",
+    "created": "2010-01-29T18:30:22Z",
+    "creators": [
+      "Tool: LicenseFind-1.0",
+      "Organization: ExampleCodeInspect ()",
+      "Person: Jane Doe ()"
+    ],
+    "licenseListVersion": "3.9"
+  },
+  "name": "Document-1",
+  "dataLicense": "CC0-1.0",
+  "comment": "This document was created using SPDX 2.0 using licenses from the web site.",
+  "documentNamespace": "http://spdx.org/spdxdocs/document-1-3F2504E0-4F89-41D3-9A0C-0305E82C3301",
+  "documentDescribes": [
+    "SPDXRef-Package"
+  ],
+  "packages": [
+    {
+      "SPDXID": "SPDXRef-Package",
+      "checksums": [
+        {
+          "algorithm": "SHA1",
+          "checksumValue": "85ed0817af83a24ad8da68c2b5094de69833983c"
+        },
+        {
+          "algorithm": "MD5",
+          "checksumValue": "624c1abb3664f4b35547e7c73864ad24"
+        },
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "11b6d3ee554eedf79299905a98f9b9a04e498210b59f15094c916c91d150efcd"
+        }
+      ],
+      "copyrightText": "Copyright 2008-2010 John Smith",
+      "description": "The GNU C Library defines functions that are specified by the ISO C standard, as well as additional features specific to POSIX and other derivatives of the Unix operating system, and extensions specific to GNU systems.",
+      "downloadLocation": "http://ftp.gnu.org/gnu/glibc/glibc-ports-2.15.tar.gz",
+      "filesAnalyzed": false,
+      "homepage": "http://ftp.gnu.org/gnu/glibc",
+      "licenseDeclared": "NOASSERTION",
+      "licenseConcluded": "NOASSERTION",
+      "name": "glibc",
+      "originator": "Organization: ExampleCodeInspect (contact@example.com)",
+      "sourceInfo": "uses glibc-2_11-branch from git://sourceware.org/git/glibc.git.",
+      "summary": "GNU C library.",
+      "supplier": "Person: Jane Doe (jane.doe@example.com)",
+      "versionInfo": "2.11.1"
+    }
+  ],
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relatedSpdxElement": "SPDXRef-Package",
+      "relationshipType": "CONTAINS"
+    }
+  ]
+}
