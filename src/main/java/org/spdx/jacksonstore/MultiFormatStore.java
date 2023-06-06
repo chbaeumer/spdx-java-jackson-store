@@ -32,6 +32,7 @@ import org.spdx.library.SpdxConstants;
 import org.spdx.storage.IModelStore;
 import org.spdx.storage.ISerializableModelStore;
 import org.spdx.storage.simple.ExtendedSpdxStore;
+import org.yaml.snakeyaml.LoaderOptions;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -72,13 +73,21 @@ public class MultiFormatStore extends ExtendedSpdxStore implements ISerializable
 	private Verbose verbose;
 	static final ObjectMapper JSON_MAPPER = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
 	static final ObjectMapper XML_MAPPER = new XmlMapper().configure(ToXmlGenerator.Feature.WRITE_XML_DECLARATION, true).enable(SerializationFeature.INDENT_OUTPUT);
-	static final YAMLFactory yamlFactory = new YAMLFactory();
-	static final ObjectMapper YAML_MAPPER = new ObjectMapper(yamlFactory);
+	static YAMLFactory yamlFactory;
+	static ObjectMapper YAML_MAPPER;
 	static final XmlFactory xmlFactory = new XmlFactory();
 	
 	private ObjectMapper outputMapper;
 	private ObjectMapper inputMapper;
-	
+
+	{
+		LoaderOptions loaderOptions = new LoaderOptions();
+		loaderOptions.setCodePointLimit(100*1024*1024);
+
+		yamlFactory = YAMLFactory.builder().loaderOptions(loaderOptions).build();
+		YAML_MAPPER = new ObjectMapper(yamlFactory);
+	}
+
 	/**
 	 * @param baseStore modelStore to store the results of the desearialization
 	 * @param format Format - XML, JSON or YAML
