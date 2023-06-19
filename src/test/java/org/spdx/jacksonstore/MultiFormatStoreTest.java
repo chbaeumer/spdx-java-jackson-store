@@ -17,6 +17,13 @@
  */
 package org.spdx.jacksonstore;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -26,7 +33,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -40,12 +46,11 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.spdx.jacksonstore.MultiFormatStore.Format;
 import org.spdx.library.InvalidSPDXAnalysisException;
 import org.spdx.library.ModelCopyManager;
 import org.spdx.library.SpdxConstants;
-import org.spdx.library.SpdxObjectNotInStoreException;
 import org.spdx.library.Version;
 import org.spdx.library.model.Checksum;
 import org.spdx.library.model.Relationship;
@@ -69,13 +74,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 
-import junit.framework.TestCase;
-
 /**
  * @author Gary O'Neall
  *
  */
-public class MultiFormatStoreTest extends TestCase {
+class MultiFormatStoreTest {
 
 	static final Logger logger = LoggerFactory.getLogger(JacksonSerializer.class);
 
@@ -90,14 +93,12 @@ public class MultiFormatStoreTest extends TestCase {
 	 * @see junit.framework.TestCase#setUp()
 	 */
 	protected void setUp() throws Exception {
-		super.setUp();
 	}
 
 	/* (non-Javadoc)
 	 * @see junit.framework.TestCase#tearDown()
 	 */
 	protected void tearDown() throws Exception {
-		super.tearDown();
 	}
 
 	/**
@@ -107,7 +108,7 @@ public class MultiFormatStoreTest extends TestCase {
 	 * @throws SpdxCompareException 
 	 */
 	@Test
-	public void testDeSerializeSerializeJson() throws InvalidSPDXAnalysisException, IOException, SpdxCompareException {
+	void testDeSerializeSerializeJson() throws InvalidSPDXAnalysisException, IOException, SpdxCompareException {
 		File jsonFile = new File(JSON_FILE_PATH);
 		MultiFormatStore inputStore = new MultiFormatStore(new InMemSpdxStore(), Format.JSON_PRETTY);
 		try (InputStream input = new FileInputStream(jsonFile)) {
@@ -147,7 +148,7 @@ public class MultiFormatStoreTest extends TestCase {
 	}
 	
 	@Test
-	public void testDeserialize2point3Fields() throws InvalidSPDXAnalysisException, IOException, SpdxCompareException {
+	void testDeserialize2point3Fields() throws InvalidSPDXAnalysisException, IOException, SpdxCompareException {
 		File jsonFile = new File(JSON_FILE_PATH);
 		MultiFormatStore inputStore = new MultiFormatStore(new InMemSpdxStore(), Format.JSON_PRETTY);
 		try (InputStream input = new FileInputStream(jsonFile)) {
@@ -207,7 +208,7 @@ public class MultiFormatStoreTest extends TestCase {
 	}
 	
 	@Test
-	public void testDeSerializeSerializeYaml() throws InvalidSPDXAnalysisException, IOException, SpdxCompareException {
+	void testDeSerializeSerializeYaml() throws InvalidSPDXAnalysisException, IOException, SpdxCompareException {
 		File jsonFile = new File(JSON_FILE_PATH);
 		MultiFormatStore inputStore = new MultiFormatStore(new InMemSpdxStore(), Format.JSON_PRETTY);
 		try (InputStream input = new FileInputStream(jsonFile)) {
@@ -240,7 +241,7 @@ public class MultiFormatStoreTest extends TestCase {
 	}
 
 	@Test
-	public void testDeSerializeSerializeXml() throws InvalidSPDXAnalysisException, IOException, SpdxCompareException {
+	void testDeSerializeSerializeXml() throws InvalidSPDXAnalysisException, IOException, SpdxCompareException {
 		File jsonFile = new File(JSON_FILE_PATH);
 		MultiFormatStore inputStore = new MultiFormatStore(new InMemSpdxStore(), Format.JSON_PRETTY);
 		try (InputStream input = new FileInputStream(jsonFile)) {
@@ -276,20 +277,20 @@ public class MultiFormatStoreTest extends TestCase {
 	}
 	
 	// Test for issue #21 Validation accepts invalid SPDX YAML files
-	// @Test
-	// public void testSingularRelationship() throws FileNotFoundException, IOException, InvalidSPDXAnalysisException {
-	//     File jsonFile = new File(SINGULAR_RELATIONSHIP_FILE_PATH);
-    //     MultiFormatStore inputStore = new MultiFormatStore(new InMemSpdxStore(), Format.JSON_PRETTY);
-    //     try (InputStream input = new FileInputStream(jsonFile)) {
-    //         inputStore.deSerialize(input, false);
-    //         fail("Singular relationship property should not succeed");
-    //     } catch(InvalidSPDXAnalysisException ex) {
-    //         // expected
-    //     }
-	// }
+	@Test
+	void testSingularRelationship() throws FileNotFoundException, IOException, InvalidSPDXAnalysisException {
+	    File jsonFile = new File(SINGULAR_RELATIONSHIP_FILE_PATH);
+        MultiFormatStore inputStore = new MultiFormatStore(new InMemSpdxStore(), Format.JSON_PRETTY);
+		assertThrows(InvalidSPDXAnalysisException.class, () -> {
+			try (InputStream input = new FileInputStream(jsonFile)) {
+				inputStore.deSerialize(input, false);
+				fail("Singular relationship property should not succeed");
+			}
+		});
+	}
 	
 	@Test
-	public void testDuplicates() throws FileNotFoundException, IOException, InvalidSPDXAnalysisException, SpdxCompareException {
+	void testDuplicates() throws FileNotFoundException, IOException, InvalidSPDXAnalysisException, SpdxCompareException {
 		File jsonFile = new File(JSON_2_2_FILE_PATH);
 		MultiFormatStore inputStore = new MultiFormatStore(new InMemSpdxStore(), Format.JSON_PRETTY);
 		try (InputStream input = new FileInputStream(jsonFile)) {
@@ -319,7 +320,7 @@ public class MultiFormatStoreTest extends TestCase {
 	}
 	
 	@Test
-	public void testNoHasFiles() throws FileNotFoundException, IOException, InvalidSPDXAnalysisException, SpdxCompareException {
+	void testNoHasFiles() throws FileNotFoundException, IOException, InvalidSPDXAnalysisException, SpdxCompareException {
 		File jsonFile = new File(JSON_2_2_FILE_PATH);
 		MultiFormatStore inputStore = new MultiFormatStore(new InMemSpdxStore(), Format.JSON_PRETTY);
 		try (InputStream input = new FileInputStream(jsonFile)) {
@@ -354,7 +355,7 @@ public class MultiFormatStoreTest extends TestCase {
 	 * @throws IOException 
 	 */
 	@Test
-	public void testRelationshipComment() throws InvalidSPDXAnalysisException, IOException {
+	void testRelationshipComment() throws InvalidSPDXAnalysisException, IOException {
 		String documentUri = "https://someuri";
         ModelCopyManager copyManager = new ModelCopyManager();
         ISerializableModelStore modelStore = new MultiFormatStore(new InMemSpdxStore(), MultiFormatStore.Format.JSON_PRETTY);
@@ -442,7 +443,7 @@ public class MultiFormatStoreTest extends TestCase {
 	 * @throws IOException 
 	 */
 	@Test
-	public void testDocumentDescribes() throws InvalidSPDXAnalysisException, IOException {
+	void testDocumentDescribes() throws InvalidSPDXAnalysisException, IOException {
 		String documentUri = "https://someuri";
         ModelCopyManager copyManager = new ModelCopyManager();
         ISerializableModelStore modelStore = new MultiFormatStore(new InMemSpdxStore(), MultiFormatStore.Format.JSON_PRETTY);
@@ -534,7 +535,7 @@ public class MultiFormatStoreTest extends TestCase {
 	 * @throws IOException 
 	 */
 	@Test
-	public void testhasFiles() throws InvalidSPDXAnalysisException, IOException {
+	void testhasFiles() throws InvalidSPDXAnalysisException, IOException {
 		String documentUri = "https://someuri";
         ModelCopyManager copyManager = new ModelCopyManager();
         ISerializableModelStore modelStore = new MultiFormatStore(new InMemSpdxStore(), MultiFormatStore.Format.JSON_PRETTY);
@@ -630,21 +631,24 @@ public class MultiFormatStoreTest extends TestCase {
 	}
 
 	@Test
-	public void testExternalReferences() throws FileNotFoundException, IOException, InvalidSPDXAnalysisException, SpdxCompareException {
+	void testExternalReferences() throws FileNotFoundException, IOException, InvalidSPDXAnalysisException, SpdxCompareException {
 		MultiFormatStore inputStore = new MultiFormatStore(new InMemSpdxStore(), Format.JSON_PRETTY);
 		Arrays.asList("document-1.spdx.json", "document-2.spdx.json", "document-3.spdx.json", "document-4.spdx.json").forEach( f -> {
-			File jsonFile = new File("testResources" + File.separator + f);
-			try (InputStream input = new FileInputStream(jsonFile)) {
+			File jsonFile1 = new File("testResources" + File.separator + f);
+			try (InputStream input = new FileInputStream(jsonFile1)) {
 				inputStore.deSerialize(input, false);
 			} 
 			catch (IOException e) {}
 			catch (InvalidSPDXAnalysisException e) {}
 		});
-		File jsonFile = new File("testResources" + File.separator + "SPDXJSONExample-v2.2-with-external-refs.spdx.json");
-		try (InputStream input = new FileInputStream(jsonFile)) {
-			inputStore.deSerialize(input, false);
-		} 
 
+		File jsonFile = new File("testResources" + File.separator + "SPDXJSONExample-v2.2-with-external-refs.spdx.json");
+		assertDoesNotThrow(() -> {
+			try (InputStream input = new FileInputStream(jsonFile)) {
+				inputStore.deSerialize(input, false);
+			} 
+		});
+		
 		inputStore.getDocumentUris().forEach( uri -> {
 			try {
 				SpdxDocument spdxDocument = new SpdxDocument(inputStore, uri, null, false);
@@ -653,7 +657,7 @@ public class MultiFormatStoreTest extends TestCase {
 			catch (InvalidSPDXAnalysisException e) {}
 		});
 
-		List<String> serializedDocuments = inputStore.getDocumentUris().stream().map( uri -> {
+		inputStore.getDocumentUris().stream().map( uri -> {
 			ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
 			inputStore.setFormat(Format.JSON_PRETTY);
 			try {
@@ -664,9 +668,26 @@ public class MultiFormatStoreTest extends TestCase {
 			return byteArrayOutputStream.toString();
 		}).collect(Collectors.toList());
 
-		String documentUri = inputStore.getDocumentUris().get(0);
-		SpdxDocument inputDocument = new SpdxDocument(inputStore, documentUri, null, false);
-		List<String> verify = inputDocument.verify();
-		assertEquals(0, verify.size());
+		for(String documentUri:inputStore.getDocumentUris()) {
+			SpdxDocument spdxDocument = new SpdxDocument(inputStore, documentUri, null, false);
+			List<String> verify = spdxDocument.verify();
+			assertEquals(0, verify.size());
+
+			assertEquals(spdxDocument.getRelationships().size(), 2);
+
+			SpdxPackage spdxPackage = new SpdxPackage(inputStore, documentUri, "SPDXRef-Package", null, false);
+
+			if (spdxDocument.getName().get().equals("SPDX-Tools-v2.0")) {
+				assertEquals(spdxPackage.getRelationships().size(), 1);
+			} else if (spdxDocument.getName().get().equals("Document-1")) {
+				assertEquals(spdxPackage.getRelationships().size(), 0);
+			} else if (spdxDocument.getName().get().equals("Document-2")) {
+				assertEquals(spdxPackage.getRelationships().size(), 1);
+			} else if (spdxDocument.getName().get().equals("Document-3")) {
+				assertEquals(spdxPackage.getRelationships().size(), 0);
+			} else if (spdxDocument.getName().get().equals("Document-4")) {
+				assertEquals(spdxPackage.getRelationships().size(), 1);
+			} 
+		}
 	}
 }

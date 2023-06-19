@@ -17,12 +17,15 @@
  */
 package org.spdx.jacksonstore;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.util.Objects;
 
+import org.apache.commons.codec.digest.DigestUtils;
 import org.json.JSONObject;
 import org.json.XML;
 import org.slf4j.Logger;
@@ -235,13 +238,17 @@ public class MultiFormatStore extends ExtendedSpdxStore implements ISerializable
 		if (this.verbose != Verbose.COMPACT) {
 			throw new InvalidSPDXAnalysisException("Only COMPACT verbose option is supported for deserialization");
 		}
+		ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+		stream.transferTo(outputStream);
+		
+		String sha1 = DigestUtils.sha1Hex(new ByteArrayInputStream(outputStream.toByteArray()));
 		JsonNode doc;
 		if (Format.XML.equals(format)) {
 			// Jackson XML mapper does not support deserializing collections or arrays.  Use Json-In-Java to convert to JSON
-			JSONObject jo = XML.toJSONObject(new InputStreamReader(stream, "UTF-8"));
+			JSONObject jo = XML.toJSONObject(new InputStreamReader(new ByteArrayInputStream(outputStream.toByteArray()), "UTF-8"));
 			doc = inputMapper.readTree(jo.toString()).get("Document");
 		} else {
-			doc  = inputMapper.readTree(stream);
+			doc  = inputMapper.readTree(new ByteArrayInputStream(outputStream.toByteArray()));
 		}
 		if (Objects.isNull(doc)) {
 			throw new InvalidSPDXAnalysisException("Missing SPDX Document");
@@ -266,7 +273,7 @@ public class MultiFormatStore extends ExtendedSpdxStore implements ISerializable
 			}
 		}
 		JacksonDeSerializer deSerializer = new JacksonDeSerializer(this, format);
-		deSerializer.storeDocument(documentNamespace, doc);	
+		deSerializer.storeDocument(documentNamespace, sha1, doc);	
 		return documentNamespace;
 
 	}

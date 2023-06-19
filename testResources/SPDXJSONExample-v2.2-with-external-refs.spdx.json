@@ -48,7 +48,7 @@
       "spdxDocument": "http://spdx.org/spdxdocs/document-4-3F2504E0-4F89-41D3-9A0C-0305E82C3301"
     }
   ],
-  "documentNamespace": "http://spdx.org/spdxdocs/spdx-example-444504E0-4F89-41D3-9A0C-0305E82C3301",
+  "documentNamespace": "http://spdx.org/spdxdocs/spdx-example-with-external-refs-444504E0-4F89-41D3-9A0C-0305E82C3301",
   "documentDescribes": [
     "SPDXRef-Package"
   ],

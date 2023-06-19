@@ -39,6 +39,7 @@ import org.spdx.jacksonstore.MultiFormatStore.Format;
 import org.spdx.library.InvalidSPDXAnalysisException;
 import org.spdx.library.SpdxConstants;
 import org.spdx.library.model.Checksum;
+import org.spdx.library.model.ExternalDocumentRef;
 import org.spdx.library.model.ExternalSpdxElement;
 import org.spdx.library.model.IndividualUriValue;
 import org.spdx.library.model.ModelStorageClassConverter;
@@ -102,13 +103,15 @@ public class JacksonDeSerializer {
 	 * @throws InvalidSPDXAnalysisException
 	 */
 	@SuppressWarnings("unchecked")
-	public void storeDocument(String documentNamespace, JsonNode doc) throws InvalidSPDXAnalysisException {
+	public void storeDocument(String documentNamespace, String sha1, JsonNode doc) throws InvalidSPDXAnalysisException {
 		Objects.requireNonNull(documentNamespace, "Null required document namespace");
 		Objects.requireNonNull(doc, "Null document JSON Node");
 		IModelStoreLock lock = store.enterCriticalSection(documentNamespace, false);
 		try {
 			Map<String, String> spdxIdProperties = new HashMap<>();	// properties which contain an SPDX id which needs to be replaced
 			store.create(documentNamespace, SpdxConstants.SPDX_DOCUMENT_ID, SpdxConstants.CLASS_SPDX_DOCUMENT);
+			Checksum documentChecksum = Checksum.create(store, documentNamespace, ChecksumAlgorithm.SHA1, sha1);
+			store.setValue(documentNamespace, SpdxConstants.SPDX_DOCUMENT_ID, "checksum", new TypedValue(documentChecksum.getId(), SpdxConstants.CLASS_SPDX_CHECKSUM));
 			restoreObjectPropertyValues(documentNamespace, SpdxConstants.SPDX_DOCUMENT_ID, doc, spdxIdProperties);
 			// restore the packages
 			Map<String, TypedValue> addedElements = new HashMap<>();
@@ -313,11 +316,8 @@ public class JacksonDeSerializer {
 		}
 		String externalDocumentNamespace = matcher.group(1);
 		String externalElementId = matcher.group(2);
-		Optional<TypedValue> mayBeExternalElement = store.getTypedValue(externalDocumentNamespace, externalElementId);
-		if (mayBeExternalElement.isEmpty()) {
-			throw new InvalidSPDXAnalysisException("Cannot resolve referenced element "+ element);
-		}
-		TypedValue externalElement = mayBeExternalElement.get();
+		TypedValue externalElement = store.getTypedValue(externalDocumentNamespace, externalElementId)
+			.orElseThrow(() -> new InvalidSPDXAnalysisException("Cannot resolve referenced element "+ element));
 
 		SpdxDocument spdxDocument = new SpdxDocument(store, externalDocumentNamespace, null, false);
 
@@ -329,13 +329,24 @@ public class JacksonDeSerializer {
 				throw new InvalidSPDXAnalysisException("Related element does not match an external reference: "+relatedElementUri);
 			}
 			String relatedElementDocumentNamespace = relatedElementMatcher.group(1);
-			String relatedElementId = relatedElementMatcher.group(2);
-	
-			spdxDocument.createExternalDocumentRef(externalDocumentRefId, relatedElementDocumentNamespace, Checksum.create(store, externalDocumentNamespace, ChecksumAlgorithm.SHA1, "d7579a802af116d0481526984990e37e00e3d734"));
+			
+			Checksum checksum = createChecksum(externalDocumentNamespace, getChecksumFromCurrentDocument(documentNamespace, relatedElementDocumentNamespace))
+				.orElseThrow(() -> new InvalidSPDXAnalysisException("Can not create checksum for "+externalDocumentRefId+" in "+externalDocumentNamespace));
+
+			spdxDocument.createExternalDocumentRef(externalDocumentRefId, relatedElementDocumentNamespace, checksum);
 
 			return addRelationshipFromTo(externalDocumentNamespace, externalElement, relationshipType, relatedElement, relationshipComment); 
 		} else {
-			spdxDocument.createExternalDocumentRef(externalDocumentRefId, documentNamespace, Checksum.create(store, externalDocumentNamespace, ChecksumAlgorithm.SHA1, "d7579a802af116d0481526984990e37e00e3d734"));
+			Object checksumTV = store.getValue(documentNamespace, SpdxConstants.SPDX_DOCUMENT_ID, "checksum").orElseGet(null);
+			if (Objects.isNull(checksumTV)) {
+				throw new InvalidSPDXAnalysisException("Document checksum not found");
+			}
+			String checksumId = ((TypedValue) checksumTV).getId();
+
+			Checksum checksum = createChecksum(externalDocumentNamespace, Optional.of(new Checksum(store, documentNamespace, checksumId, null, false)))
+				.orElseThrow(() -> new InvalidSPDXAnalysisException("Can not create checksum for "+externalDocumentRefId+" in "+externalDocumentNamespace));
+
+			spdxDocument.createExternalDocumentRef(externalDocumentRefId, documentNamespace, checksum);
 
 			IndividualUriValue rewrittenRelatedElement = new IndividualUriValue() {
 				@Override
@@ -350,6 +361,57 @@ public class JacksonDeSerializer {
 			};	
 			return addRelationshipFromTo(externalDocumentNamespace, externalElement, relationshipType, rewrittenRelatedElement, relationshipComment); 
 
+		}
+	}
+
+	/**
+	 * Gets the checksum for the externalDocumentspace from the document reference by the documentNamespace or null.
+	 * 
+	 * @param documentNamepace
+	 * @param externalDocumentNamepace
+	 * @return An optional with the found checksum or empty
+	 * @throws InvalidSPDXAnalysisException
+	 */
+	private Optional<Checksum> getChecksumFromCurrentDocument(String documentNamepace, String externalDocumentNamepace)  throws InvalidSPDXAnalysisException {
+		SpdxDocument spdxDocument = new SpdxDocument(store, documentNamepace, null, false);
+		if (Objects.isNull(spdxDocument)) {
+			throw new InvalidSPDXAnalysisException("SpdxDocument does not exist");
+		}
+
+		Optional<ExternalDocumentRef> externalDocumentRef = spdxDocument.getExternalDocumentRefs().stream()
+			.filter( ref -> {
+				try {
+					return ref.getSpdxDocumentNamespace().equalsIgnoreCase(externalDocumentNamepace);
+				} catch (InvalidSPDXAnalysisException e) {
+					return false;
+				}
+			})
+			.findFirst();
+
+		if (externalDocumentRef.isPresent()) {
+			return  externalDocumentRef.get().getChecksum();
+		}
+
+		return Optional.empty();
+	}
+
+	/**
+	 * Create a new checksum in the documentNamespace.
+	 * If a checksum template exists copy value otherwise create a dummy checksum.
+	 * 
+	 * @param documentNamepace
+	 * @param checksum
+	 * @return An optional with the new checksum or empty
+	 */
+	private Optional<Checksum> createChecksum(String documentNamepace, Optional<Checksum> checksum){
+		try {
+			if (checksum.isPresent()) {
+				return Optional.of(Checksum.create(store, documentNamepace, checksum.get().getAlgorithm(), checksum.get().getValue()));
+			} else {
+				return Optional.of(Checksum.create(store, documentNamepace, ChecksumAlgorithm.SHA1, "da39a3ee5e6b4b0d3255bfef95601890afd80709"));
+			}
+		} catch (InvalidSPDXAnalysisException e) {
+			return Optional.empty();
 		}
 	}
 
